@@ -2,6 +2,7 @@ import requests
 import json
 import time
 from typing import List, Dict, Optional, Union, Generator
+from pubtator_global_variables import *
 
 class PubTator3API:
     BASE_URL = "https://www.ncbi.nlm.nih.gov/research/pubtator3-api"
@@ -9,10 +10,7 @@ class PubTator3API:
     
     def __init__(self, max_retries: int = 3, timeout: int = 30):
         self.session = requests.Session()
-        self.session.headers.update({
-            "User-Agent": "PubTator3API Python Client/2.1",
-            "Accept": "application/json"
-        })
+        self.session.headers.update(headers)
         self.request_delay = 0.34  # Comply with the 3 requests/second limit
         self.max_retries = max_retries
         self.timeout = timeout
@@ -60,9 +58,9 @@ class PubTator3API:
         if not ids:
             raise ValueError("IDs list cannot be empty")
         
-        if id_type not in ["pmid", "pmcid"]:
+        if id_type not in PUB_ID_FORMATS:
             raise ValueError("id_type must be 'pmid' or 'pmcid'")
-        if format not in ["pubtator", "biocxml", "biocjson"]:
+        if format not in AVAILABLE_FORMATS:
             raise ValueError("format must be one of: pubtator, biocxml, biocjson")
         
         try:
@@ -96,22 +94,21 @@ class PubTator3API:
         limit: Optional[int] = None
     ) -> Dict:
         """
-        通过自由文本查询查找生物概念的标识符
+        locates the valid entity ids
         
-        参数:
-            query: 查询文本
-            concept: 可选，指定生物概念类型
-                     (如"gene", "disease", "chemical", "species", "mutation")
-            limit: 可选，限制返回结果数量
+        arguments:
+            query: text input
+            concept: one of gene, chemical, drugs, disease, variant, species, cell_line
+            limit: int | number of IDs to return
         
-        返回:
-            包含实体ID的JSON字典
+        returns:
+            JSON of entity IDs
         """
         url = f"{self.BASE_URL}/entity/autocomplete/"
         params = {"query": query}
         
         if concept:
-            if concept not in ["gene", "disease", "chemical", "species", "mutation"]:
+            if concept not in ENTITIES:
                 raise ValueError("Invalid concept type")
             params["concept"] = concept
         if limit:
@@ -148,17 +145,12 @@ class PubTator3API:
             raise ValueError("Invalid entity ID format, should start with '@', e.g., '@CHEMICAL_remdesivir' or '@DISEASE_Neoplasms'")
         params = {"e1": entity_id}
         
-        valid_relations = ["treat", "cause", "cotreat", "convert", "compare",
-                          "interact", "associate", "positive_correlate",
-                          "negative_correlate", "prevent", "inhibit",
-                          "stimulate", "drug_interact"]
-        
         if relation_type:
-            if relation_type not in valid_relations and relation_type != "ANY":
+            if relation_type not in RELATION and relation_type != "ANY":
                 raise ValueError("Invalid relation type")
             params["type"] = relation_type
         if target_entity_type:
-            if target_entity_type not in ["gene", "disease", "chemical", "variant"]:
+            if target_entity_type not in ENTITY_TYPES:
                 raise ValueError("Invalid target entity type")
             params["e2"] = target_entity_type
         if max_results:
@@ -310,7 +302,7 @@ class PubTator3API:
                             continue
                         raise
             
-            # 处理剩余的PMID
+            # 处理剩余的PMID (handles remaining PMIDs)
             if all_pmids:
                 try:
                     # 确保所有剩余的PMID都是字符串类型
@@ -323,25 +315,25 @@ class PubTator3API:
                     )
                     yield result
                 except requests.exceptions.RequestException as e:
-                    print(f"处理剩余PMID失败(数量:{len(all_pmids)}): {str(e)}")
+                    print(f"Handling remaining failed PMID retrievals (count:{len(all_pmids)}): {str(e)}")
                     raise
                     
         except Exception as e:
-            raise Exception(f"批量导出过程中发生错误: {str(e)}")
+            raise Exception(f"An error occurred during the batch export process: {str(e)}")
 
+# Test Program
 if __name__ == "__main__":
     import argparse
     import logging
     from datetime import datetime
     
-    # 设置日志
+    # Logger configs
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s'
     )
     logger = logging.getLogger(__name__)
     
-    # 命令行参数
     parser = argparse.ArgumentParser(description='PubTator3API Test Program')
     parser.add_argument('--test', choices=['all', 'export', 'entity', 'relation', 'annotate', 'search'],
                         default='all', help='Select test case to run')

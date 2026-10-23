@@ -1,14 +1,14 @@
 from typing import List, Dict, Optional, Any, Union
 import asyncio
 import logging
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 from pubtator_search import PubTator3API
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Initialize FastMCP server
-mcp = FastMCP("pubtator")
+mcp = MCPServer("pubtator")
 
 # Initialize PubTator3API client
 client = PubTator3API(max_retries=3, timeout=30)
@@ -56,7 +56,7 @@ async def export_publications(ids: List[str], id_type: str = "pmid", format: str
         return {"error": f"An error occurred while exporting publications: {str(e)}"}
 
 @mcp.tool()
-async def find_entity_id(query: str, concept: Optional[str] = None, limit: Optional[int] = None) -> Dict[str, Any]:
+async def find_entity_id(query: str, concept: Optional[str] = None, limit: Optional[int] = None) -> List[Dict[str, Any]]:
     logging.info(f"Finding entity ID for query: {query}, concept: {concept}, limit: {limit}")
     """
     Find entity ID using a free text query.
@@ -73,10 +73,10 @@ async def find_entity_id(query: str, concept: Optional[str] = None, limit: Optio
         result = await asyncio.to_thread(client.find_entity_id, query, concept, limit)
         return result
     except Exception as e:
-        return {"error": f"An error occurred while finding entity ID: {str(e)}"}
+        return [{"error": f"An error occurred while finding entity ID: {str(e)}"}]
 
 @mcp.tool()
-async def find_related_entities(entity_id: str, relation_type: Optional[str] = None, target_entity_type: Optional[str] = None, max_results: Optional[int] = None) -> Dict[str, Any]:
+async def find_related_entities(entity_id: str, relation_type: Optional[str] = None, target_entity_type: Optional[str] = None, max_results: Optional[int] = None) -> List:
     logging.info(f"Finding related entities for: {entity_id}, relation_type: {relation_type}, target_entity_type: {target_entity_type}, max_results: {max_results}")
     """
     Find related entities.
