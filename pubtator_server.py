@@ -105,7 +105,7 @@ async def find_related_entities(entity_id: str, relation_type: Optional[str] = N
         return {"error": f"An error occurred while finding related entities: {str(e)}"}
 
 @mcp.tool()
-async def batch_export_from_search(query: str, format: str = "biocjson", max_pages: Optional[int] = 3, full_text: bool = False, batch_size: int = 100) -> List[Union[Dict, str]]:
+async def batch_export_from_search(query: str, format: str = "biocjson", max_pages: Optional[int] = 3, full_text: bool = False, extract_text: bool = False, batch_size: int = 100) -> List[Union[Dict, str]]:
     logging.info(f"Batch exporting from search: {query}, format: {format}, max_pages: {max_pages}, full_text: {full_text}, batch_size: {batch_size}")
     """
     Search and batch export publications.
@@ -115,39 +115,18 @@ async def batch_export_from_search(query: str, format: str = "biocjson", max_pag
         format: Export format
         max_pages: Maximum number of search pages
         full_text: Whether to export full text
+        extract_text: Whether to extract the text only from the PMIDs (not really working)
         batch_size: Number of PMIDs to process in each batch
 
     Returns:
         List of dictionaries or strings containing exported publication data
     """
     try:
-        results = await asyncio.to_thread(list, client.batch_export_from_search(query, format, max_pages, full_text, batch_size))
+        results = await asyncio.to_thread(list, client.batch_export_from_search(query, format, max_pages, full_text, extract_text, batch_size))
         return results
     except Exception as e:
         logging.error(f"An error occurred during batch export: {str(e)}")
         return [{"error": f"An error occurred during batch export: {str(e)}"}]
-
-# To integrate into export_publications?
-# @mcp.tool()
-# async def extract_publication_text(publications: Dict) -> Dict[str, str]:
-#     logging.info(f"Parsing text from publications...")
-#     '''
-#     Handle parsing of publications to summarise efficiently in local LLMs
-#     ---
-#     arguments
-#     ---
-#     publications: Dict | results from export_publications
-    
-#     ---
-#     returns
-#     ---
-#     JSON/Dict of text results
-#     '''
-#     try:
-#         result = await asyncio.to_thread(client.extract_publication_text, publications=publications)
-#         return result
-#     except Exception as e:
-#         return {"error": f"An error occurred while extracting text from publications: {str(e)}"}
 
 if __name__ == "__main__":
     logging.info("Starting PubTator MCP server")

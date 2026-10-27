@@ -278,6 +278,7 @@ class PubTator3API:
         format: str = "biocjson",
         max_pages: Optional[int] = 3,
         full_text: bool = False,
+        extract_text: bool = False,
         batch_size: int = 100
     ) -> Generator[Union[Dict, str], None, None]:
         """Search for and batch-export literature, supports batch processing and error retries
@@ -289,6 +290,7 @@ class PubTator3API:
             format: str | one of pubtator, biocxml, biocjson, defauly biocjson
             max_pages: int | maximum number of pages to return
             full_text: bool | return full text
+            extract_text: bool | return only the text from the publications
             batch_size: int | Number of PMIDs per batch
         ---    
         returns
@@ -310,7 +312,8 @@ class PubTator3API:
                             batch,
                             "pmid",
                             format,
-                            full_text
+                            full_text,
+                            extract_text
                         )
                         yield result
                         all_pmids = all_pmids[batch_size:]
@@ -331,7 +334,8 @@ class PubTator3API:
                         all_pmids,
                         "pmid",
                         format,
-                        full_text
+                        full_text,
+                        extract_text
                     )
                     yield result
                 except requests.exceptions.RequestException as e:
