@@ -44,16 +44,19 @@ class PubTator3API:
         full_text: bool = False
     ) -> Union[Dict, str]:
         """
-        导出一组文献的标注结果
+        Export the annotation results for a set of documents
+        ---
+        arguments
+        ---
+            ids: list | PMIDs or PMCIDs
+            id_type: str | one of pmid or pmcid
+            format: str | one of pubtator, biocxml, or biocjson (default biocjson)
+            full_text: bool | return full text
         
-        参数:
-            ids: 文献ID列表(pmids或pmcids)
-            id_type: ID类型，可以是"pmid"或"pmcid"
-            format: 返回格式("pubtator", "biocxml"或"biocjson")
-            full_text: 是否获取全文(仅适用于biocxml/biocjson格式)
-        
-        返回:
-            标注结果(JSON字典或XML字符串)
+        ---
+        returns
+        ---
+            Annotation results (JSON dictionary or XML string)
         """
         if not ids:
             raise ValueError("IDs list cannot be empty")
@@ -78,7 +81,7 @@ class PubTator3API:
             
             if format == "biocjson":
                 result = response.json()
-                # 处理不同的返回结构
+                # Handling different return structures
                 if isinstance(result, list):
                     return {"documents": result}  # Standardize to documents key
                 return result
@@ -95,13 +98,15 @@ class PubTator3API:
     ) -> Dict:
         """
         locates the valid entity ids
-        
-        arguments:
-            query: text input
-            concept: one of gene, chemical, drugs, disease, variant, species, cell_line
-            limit: int | number of IDs to return
-        
-        returns:
+        ---
+        arguments
+        ---
+            query: str | free text input
+            concept: str or None | one of gene, chemical, drugs, disease, variant, species, cell_line
+            limit: int or None | number of IDs to return
+        ---
+        returns
+        ---
             JSON of entity IDs
         """
         url = f"{self.BASE_URL}/entity/autocomplete/"
@@ -126,21 +131,21 @@ class PubTator3API:
         max_results: Optional[int] = None
     ) -> Dict:
         """
-        查找相关实体
-        
-        参数:
-            entity_id: 实体ID(通过find_entity_id获取)
-            relation_type: 可选，指定关系类型
-                          (如"treat", "cause", "interact", "associate")
-            target_entity_type: 可选，指定目标实体类型
-                               (如"gene", "disease", "chemical")
-            max_results: 可选，限制返回结果的最大数量
-        
-        返回:
-            相关实体结果的JSON字典
+       finds related entities
+        ---
+        arguments
+        ---
+            entity_id: str | from find_entity_id
+            relation_type: str or None | one of associate, cause, compare, cotreat, drug_interact, inhibit, interact, negative_correlate, positive_correlate, prevent, stimulate, treat
+            target_entity_type: str or None | one of gene, chemical, disease, variant
+            max_results: int or None | maximum number of results to return
+        ---
+        returns
+        ---
+            related entities in JSON
         """
         url = f"{self.BASE_URL}/relations"
-        # 确保实体ID格式正确
+        # Ensures entity_id has @ so it's valid
         if not entity_id.startswith("@"):
             raise ValueError("Invalid entity ID format, should start with '@', e.g., '@CHEMICAL_remdesivir' or '@DISEASE_Neoplasms'")
         params = {"e1": entity_id}
@@ -167,19 +172,22 @@ class PubTator3API:
         self,
         query: str,
         page: int = 1,
-        max_pages: Optional[int] = None,
-        batch_size: int = 100
+        max_pages: Optional[int] = None
     ) -> Generator[Dict, None, None]:
-        """增强的搜索功能，支持自动分页和错误重试
+        """
+        all encompassing search function
         
-        参数:
-            query: 查询内容(自由文本/实体ID/关系查询)
-            page: 起始页码
-            max_pages: 最大获取页数(None表示无限制)
-            batch_size: 每批处理的PMID数量
+        ---
+        arguments
+        ---
+            query: str | free text, entity IDs, relationships
+            page: int | page number to return 
+            max_pages: int or None | maximum number of pages to return
         
-        返回:
-            生成器，逐页产生搜索结果
+        ---
+        returns
+        ---
+            GeneratorDict of results
         """
         current_page = page
         consecutive_errors = 0
@@ -197,7 +205,7 @@ class PubTator3API:
                 if not data.get("results"):
                     break
                     
-                consecutive_errors = 0  # 重置错误计数
+                consecutive_errors = 0 
                 yield data
                 current_page += 1
                 
@@ -205,7 +213,7 @@ class PubTator3API:
                 consecutive_errors += 1
                 if consecutive_errors >= max_consecutive_errors:
                     raise Exception(f"Search terminated after {max_consecutive_errors} consecutive request failures")
-                time.sleep(min(2 ** consecutive_errors, 10))  # 指数退避
+                time.sleep(min(2 ** consecutive_errors, 10))
                 continue
             
             except json.JSONDecodeError:
@@ -223,16 +231,19 @@ class PubTator3API:
         max_pages: Optional[int] = None
     ) -> Generator[Dict, None, None]:
         """
-        专门的关系查询方法
+        specific entity relationship search
+        ---
+        arguments
+        ---
+            entity1: first entity ID (from find_entity_id)
+            relation_type: str | one of ANY or associate, cause, compare, cotreat, drug_interact, inhibit, interact, negative_correlate, positive_correlate, prevent, stimulate, treat
+            entity2: str or None | second entity type from gene, chemical, disease, or variant
+            max_pages: int or None | maximum number of pages to return
         
-        参数:
-            entity1: 第一个实体ID
-            relation_type: 关系类型(ANY/treat/cause等)
-            entity2: 第二个实体ID或类型(如"DISEASE")
-            max_pages: 最大获取页数
-        
-        返回:
-            生成器，逐页产生关系搜索结果
+        ---
+        returns
+        ---
+            GeneratorDict of results
         """
         if entity2 is None:
             query = f"relations:{relation_type}|{entity1}"
@@ -243,13 +254,16 @@ class PubTator3API:
     
     def extract_pmids_from_results(self, results: Dict) -> List[str]:
         """
-        从搜索结果中提取PMID列表
+        Extract the PMIDs obtained from the results
+        ---
+        arguments
+        ---
+            results: dict | search results
         
-        参数:
-            results: 单页搜索结果
-            
-        返回:
-            PMID列表
+        ---    
+        returns
+        ---
+            list of PMIDs
         """
         return [str(result["pmid"]) for result in results.get("results", []) if "pmid" in result]
     
@@ -261,17 +275,20 @@ class PubTator3API:
         full_text: bool = False,
         batch_size: int = 100
     ) -> Generator[Union[Dict, str], None, None]:
-        """搜索并批量导出文献，支持分批处理和错误重试
+        """Search for and batch-export literature, supports batch processing and error retries
         
-        参数:
-            query: 搜索查询
-            format: 导出格式
-            max_pages: 最大搜索页数
-            full_text: 是否导出全文
-            batch_size: 每批处理的PMID数量
-            
-        返回:
-            生成器，产生导出的文献内容
+        ---
+        arguments
+        ---
+            query: str | search query
+            format: str | one of pubtator, biocxml, biocjson, defauly biocjson
+            max_pages: int | maximum number of pages to return
+            full_text: bool | return full text
+            batch_size: int | Number of PMIDs per batch
+        ---    
+        returns
+        ---
+            GeneratorDict of literature search results
         """
         try:
             all_pmids = []
@@ -279,11 +296,10 @@ class PubTator3API:
                 page_pmids = self.extract_pmids_from_results(page_result)
                 all_pmids.extend(page_pmids)
                 
-                # 分批处理以避免URL过长和内存占用
+                # Process in batches to avoid excessively long URLs and high memory usage
                 while len(all_pmids) >= batch_size:
                     batch = all_pmids[:batch_size]
                     try:
-                        # 确保所有PMID都是字符串类型
                         batch = [str(pmid) for pmid in batch]
                         result = self.export_publications(
                             batch,
@@ -294,18 +310,17 @@ class PubTator3API:
                         yield result
                         all_pmids = all_pmids[batch_size:]
                     except requests.exceptions.RequestException as e:
-                        # 处理导出失败的情况
-                        print(f"批量导出失败(批次大小:{len(batch)}): {str(e)}")
-                        # 减小批次大小重试
+                        # Handles exception in batch processing
+                        print(f"Batch export failed (batch size:{len(batch)}): {str(e)}")
+                        # Retry with a smaller batch size
                         if batch_size > 10:
                             batch_size = batch_size // 2
                             continue
                         raise
             
-            # 处理剩余的PMID (handles remaining PMIDs)
+            # handles remaining PMIDs
             if all_pmids:
                 try:
-                    # 确保所有剩余的PMID都是字符串类型
                     all_pmids = [str(pmid) for pmid in all_pmids]
                     result = self.export_publications(
                         all_pmids,
@@ -378,7 +393,7 @@ if __name__ == "__main__":
             logger.info(f"Successfully searched: {query}")
             return results
         
-        # 执行测试
+        # Tests to execute
         test_funcs = {
             'export': test_export_publications,
             'entity': test_find_entity_id,
@@ -388,7 +403,7 @@ if __name__ == "__main__":
         
         if args.test == 'all':
             for name, func in test_funcs.items():
-                # 执行所有测试用例
+                # Execute all test cases
                 try:
                     logger.info(f"\nExecuting test: {name}")
                     result = func()
