@@ -1,7 +1,8 @@
 import requests
 import json
 import time
-from typing import List, Dict, Optional, Union, Generator
+from typing import List, Dict, Optional, Union, Generator, Any
+import xml.etree.ElementTree as ET
 from pubtator_global_variables import *
 
 class PubTator3API:
@@ -41,7 +42,8 @@ class PubTator3API:
         ids: List[str],
         id_type: str = "pmid",
         format: str = "biocjson",
-        full_text: bool = False
+        full_text: bool = False,
+        extract_text: bool = False
     ) -> Union[Dict, str]:
         """
         Export the annotation results for a set of documents
@@ -51,8 +53,8 @@ class PubTator3API:
             ids: list | PMIDs or PMCIDs
             id_type: str | one of pmid or pmcid
             format: str | one of pubtator, biocxml, or biocjson (default biocjson)
-            full_text: bool | return full text
-        
+            full_text: bool | gets full text
+            extract_text: bool | return only the text from the publications
         ---
         returns
         ---
@@ -81,11 +83,14 @@ class PubTator3API:
             
             if format == "biocjson":
                 result = response.json()
-                # Handling different return structures
                 if isinstance(result, list):
-                    return {"documents": result}  # Standardize to documents key
-                return result
-            return response.text
+                    result = {"PubTator3": result}  # standardize to the key extract_publication_text expects
+            else:
+                result = response.text
+
+            if extract_text:
+                return self.extract_publication_text(result, format=format)
+            return result
         
         except requests.exceptions.RequestException as e:
             raise Exception(f"Failed to export publications: {str(e)}")
@@ -335,6 +340,65 @@ class PubTator3API:
                     
         except Exception as e:
             raise Exception(f"An error occurred during the batch export process: {str(e)}")
+        
+    # Handle parsing of publications to summarise efficiently in local LLMs
+    def extract_publication_text(
+        self,
+        publications: Union[Dict[str, Any], str],
+        format: str = 'biocjson'
+        ) -> Dict[str, str]:
+        '''
+        Handle parsing of publications to summarise efficiently in local LLMs
+        ---
+        arguments
+        ---
+        publications: Dict or str | results from export_publications
+        format: str | result format from publications, one of pubtator, biocxml, biocjson (default: biocjson)
+        
+        ---
+        returns
+        ---
+        JSON/Dict of text results
+        '''
+        json_parsed = {}
+        if format == 'biocjson':
+            results = publications['PubTator3']
+            for i in results: # Each pmid
+                pmid = i['id'] 
+                text = [n['text'] for n in i['passages']]
+                text_joined = "\n".join(text)
+                json_parsed[pmid] = text_joined
+        
+        elif format == 'biocxml':
+            root = ET.fromstring(publications)
+            for document in root.findall('document'):
+                pmid = document.findtext('id')
+                texts = [passage.findtext('text') or "" for passage in document.findall('passage')]
+                json_parsed[pmid] = "\n".join(texts)
+                
+        elif format == 'pubtator':
+            current_pmid = None
+            texts = []
+            for line in publications.strip().split("\n"):
+                if not line.strip():
+                    if current_pmid is not None:
+                        json_parsed[current_pmid] = "\n".join(texts)
+                    current_pmid, texts = None, []
+                    continue
+                parts = line.split("|", 2)
+                if len(parts) == 3 and parts[1] in ("t", "a"):
+                    pmid, _, text = parts
+                    if pmid != current_pmid:
+                        if current_pmid is not None:
+                            json_parsed[current_pmid] = "\n".join(texts)
+                        current_pmid, texts = pmid, []
+                    texts.append(text)
+                # tab-separated annotation rows don't match pmid|t|.. or pmid|a|.. — skipped
+            if current_pmid is not None:
+                json_parsed[current_pmid] = "\n".join(texts)
+        else:
+            raise ValueError("format must be one of: biocjson, biocxml, pubtator")
+        return json_parsed
 
 # Test Program
 if __name__ == "__main__":
@@ -360,7 +424,7 @@ if __name__ == "__main__":
         def test_export_publications():
             logger.info("Testing export publications functionality...")
             pmids = ["25359968", "25359969"]
-            result = api.export_publications(pmids, format="biocjson")
+            result = api.export_publications(pmids, format="biocjson", extract_text=True)
             logger.info(f"Successfully exported {len(pmids)} publications")
             return result
         

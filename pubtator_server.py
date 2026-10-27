@@ -18,14 +18,19 @@ client = PubTator3API(max_retries=3, timeout=30)
 async def search_pubtator(query: str, max_pages: Optional[int] = 3) -> List[Dict[str, Any]]:
     logging.info(f"Searching PubTator with query: {query}, max_pages: {max_pages}")
     """
-    Search for papers on PubTator using a query string.
-
-    Args:
-        query: Search query string
-        max_pages: Maximum number of pages to retrieve (default: 3)
-
-    Returns:
-        List of dictionaries containing paper information
+    all encompassing search function
+    
+    ---
+    arguments
+    ---
+        query: str | free text, entity IDs, relationships
+        page: int | page number to return 
+        max_pages: int or None | maximum number of pages to return
+    
+    ---
+    returns
+    ---
+        GeneratorDict of results
     """
     try:
         results = await asyncio.to_thread(list, client.search(query, max_pages=max_pages))
@@ -35,22 +40,25 @@ async def search_pubtator(query: str, max_pages: Optional[int] = 3) -> List[Dict
         return [{"error": f"An error occurred while searching: {str(e)}"}]
 
 @mcp.tool()
-async def export_publications(ids: List[str], id_type: str = "pmid", format: str = "biocjson", full_text: bool = False) -> Union[Dict, str]:
+async def export_publications(ids: List[str], id_type: str = "pmid", format: str = "biocjson", full_text: bool = False, extract_text: bool = True) -> Union[Dict, str]:
     logging.info(f"Exporting publications: {ids}, id_type: {id_type}, format: {format}, full_text: {full_text}")
     """
-    Export publications from PubTator.
-
-    Args:
-        ids: List of publication IDs
-        id_type: Type of IDs (pmid or pmcid)
-        format: Export format (pubtator, biocxml, or biocjson)
-        full_text: Whether to include full text (only for biocxml/biocjson)
-
-    Returns:
-        Dictionary or string containing exported publication data
+    Export the annotation results for a set of documents
+    ---
+    arguments
+    ---
+        ids: list | PMIDs or PMCIDs
+        id_type: str | one of pmid or pmcid
+        format: str | one of pubtator, biocxml, or biocjson (default biocjson)
+        full_text: bool | gets full text
+        extract_text: bool | return only the text from the publications
+    ---
+    returns
+    ---
+        Annotation results (JSON dictionary or XML string)
     """
     try:
-        result = await asyncio.to_thread(client.export_publications, ids, id_type, format, full_text)
+        result = await asyncio.to_thread(client.export_publications, ids, id_type, format, full_text, extract_text)
         return result
     except Exception as e:
         return {"error": f"An error occurred while exporting publications: {str(e)}"}
@@ -118,6 +126,28 @@ async def batch_export_from_search(query: str, format: str = "biocjson", max_pag
     except Exception as e:
         logging.error(f"An error occurred during batch export: {str(e)}")
         return [{"error": f"An error occurred during batch export: {str(e)}"}]
+
+# To integrate into export_publications?
+# @mcp.tool()
+# async def extract_publication_text(publications: Dict) -> Dict[str, str]:
+#     logging.info(f"Parsing text from publications...")
+#     '''
+#     Handle parsing of publications to summarise efficiently in local LLMs
+#     ---
+#     arguments
+#     ---
+#     publications: Dict | results from export_publications
+    
+#     ---
+#     returns
+#     ---
+#     JSON/Dict of text results
+#     '''
+#     try:
+#         result = await asyncio.to_thread(client.extract_publication_text, publications=publications)
+#         return result
+#     except Exception as e:
+#         return {"error": f"An error occurred while extracting text from publications: {str(e)}"}
 
 if __name__ == "__main__":
     logging.info("Starting PubTator MCP server")
