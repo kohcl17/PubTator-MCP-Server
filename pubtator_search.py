@@ -103,16 +103,20 @@ class PubTator3API:
     ) -> Dict:
         """
         locates the valid entity ids
+        
         ---
         arguments
         ---
-            query: str | free text input
-            concept: str or None | one of gene, chemical, drugs, disease, variant, species, cell_line
-            limit: int or None | number of IDs to return
+        query: str | free text input
+        
+        concept: str or None | one of gene, chemical, drugs, disease, variant, species, cell_line
+        
+        limit: int or None | number of IDs to return
+            
         ---
         returns
         ---
-            JSON of entity IDs
+        JSON of entity IDs
         """
         url = f"{self.BASE_URL}/entity/autocomplete/"
         params = {"query": query}
